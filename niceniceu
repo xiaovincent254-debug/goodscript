@@ -1,0 +1,60 @@
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local livingFolder = Workspace:FindFirstChild("Living")
+
+-- Table to track state: [Model] = {spawnTime = number, processed = boolean}
+local bossRegistry = {}
+
+RunService.Heartbeat:Connect(function()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local hrp = character.HumanoidRootPart
+
+    if not livingFolder then 
+        livingFolder = Workspace:FindFirstChild("Living")
+        return 
+    end
+
+    for _, entity in ipairs(livingFolder:GetChildren()) do
+        pcall(function()
+            if entity:IsA("Model") and entity.Name == "Boss" then
+                local humanoid = entity:FindFirstChildOfClass("Humanoid")
+                local head = entity:FindFirstChild("Head")
+
+                -- If this is a new boss we haven't seen yet
+                if not bossRegistry[entity] then
+                    bossRegistry[entity] = {
+                        spawnTime = tick(),
+                        processed = false
+                    }
+                end
+
+                local data = bossRegistry[entity]
+
+                -- Check if it's alive, has a head, and we haven't killed it yet
+                if humanoid and head and humanoid.Health > 0 and not data.processed then
+                    
+                    -- Check if the 1 second delay has passed
+                    if tick() - data.spawnTime >= 1 then
+                        hrp.CFrame = entity:GetPivot()
+                        head:Destroy()
+                        
+                        -- Mark as processed so we don't teleport to a "headless" body repeatedly
+                        data.processed = true 
+                    end
+                end
+            end
+        end)
+    end
+
+    -- Cleanup: If the boss is deleted from the folder, remove it from our tracking table
+    for boss, _ in pairs(bossRegistry) do
+        if not boss:IsDescendantOf(livingFolder) then
+            bossRegistry[boss] = nil
+        end
+    end
+end)
