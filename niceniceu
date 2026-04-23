@@ -3,11 +3,16 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local targetBoss = nil
-local nextActionTime = 0 -- Cooldown tracker for the 2-second delay
-local TELEPORT_DELAY = 2 -- Configurable delay in seconds
+local timeArrived = 0
+local nextSearchTime = 0
+local lockedYHeight = 0 -- Stores the height at the moment of teleport
 
--- Function to find a valid boss
+local WAIT_BEFORE_KILL = 4  
+local TRANSITION_DELAY = 2  
+
 local function findBoss()
+    if tick() < nextSearchTime then return nil end
+
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("Model") and obj.Name == "Boss" then
             local humanoid = obj:FindFirstChildOfClass("Humanoid")
@@ -21,35 +26,47 @@ end
 
 RunService.Heartbeat:Connect(function()
     local character = player.Character
-    if not character then return end
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not character or not rootPart then return end
 
-    -- 1. Target Validation
-    if targetBoss then
-        local hum = targetBoss:FindFirstChildOfClass("Humanoid")
-        -- If boss is dead or gone, clear target
-        if not hum or hum.Health <= 0 or not targetBoss:IsDescendantOf(workspace) then
-            targetBoss = nil
-        end
-    end
-
-    -- 2. Target Acquisition
+    -- 1. Target Acquisition
     if not targetBoss then
         targetBoss = findBoss()
+        if targetBoss then
+            timeArrived = tick()
+            
+            -- Capture the boss's current Y height (plus a small offset) 
+            -- so you don't fall or float mid-teleport.
+            lockedYHeight = targetBoss:GetPivot().Position.Y + 3 
+        end
     end
 
-    -- 3. The 2-Second Delayed Execution
-    if targetBoss and tick() >= nextActionTime then
+    -- 2. Execution
+    if targetBoss then
         local humanoid = targetBoss:FindFirstChildOfClass("Humanoid")
         
-        -- Perform the teleport
-        character:PivotTo(targetBoss:GetPivot() * CFrame.new(0, 0, 3))
-
-        -- Set HP to 0
-        if humanoid then
-            humanoid.Health = 0
+        -- Validity Check
+        if not humanoid or humanoid.Health <= 0 or not targetBoss:IsDescendantOf(workspace) then
+            targetBoss = nil
+            nextSearchTime = tick() + TRANSITION_DELAY
+            return
         end
 
-        -- Set the cooldown for the next jump
-        nextActionTime = tick() + TELEPORT_DELAY
+        -- 3. Calculate the Locked-Height Position
+        local bossPivot = targetBoss:GetPivot()
+        local bossPos = bossPivot.Position
+        
+        -- Create a new CFrame using Boss X and Z, but the saved Locked Y
+        -- We also keep the Boss's orientation so you face them
+        local targetCFrame = CFrame.new(bossPos.X, lockedYHeight, bossPos.Z) 
+                           * CFrame.Angles(0, math.rad(bossPivot:ToEulerAnglesYXZ()), 0)
+                           * CFrame.new(0, 0, 3) -- Stay 3 studs away
+
+        character:PivotTo(targetCFrame)
+
+        -- 4. Timer Logic
+        if tick() - timeArrived >= WAIT_BEFORE_KILL then
+            humanoid.Health = 0
+        end
     end
 end)
