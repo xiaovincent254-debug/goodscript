@@ -3,10 +3,13 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local targetBoss = nil
+local nextTargetTime = 0 -- Stores the time when we are allowed to find a new boss
 
--- Efficiently find the next boss
+-- Function to find the next available boss
 local function findBoss()
-    -- Note: GetDescendants can be heavy; use a specific folder if possible
+    -- Only look for a boss if the 1-second cooldown has passed
+    if tick() < nextTargetTime then return nil end
+
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("Model") and obj.Name == "Boss" then
             local humanoid = obj:FindFirstChildOfClass("Humanoid")
@@ -22,32 +25,32 @@ RunService.Heartbeat:Connect(function()
     local character = player.Character
     if not character then return end
 
-    -- Validate or clear current target
+    -- 1. Check if current target is still valid/alive
     if targetBoss then
         local hum = targetBoss:FindFirstChildOfClass("Humanoid")
+        
+        -- If the boss died or was removed
         if not hum or hum.Health <= 0 or not targetBoss:IsDescendantOf(workspace) then
             targetBoss = nil
+            nextTargetTime = tick() + 1 -- Start the 1-second wait timer
         end
     end
 
-    -- Target acquisition
+    -- 2. Look for a new target if we don't have one
     if not targetBoss then
         targetBoss = findBoss()
     end
 
-    -- Execution
+    -- 3. Execution Phase
     if targetBoss then
-        -- GetPivot() works even if parts are still streaming in
-        local bossCFrame = targetBoss:GetPivot()
+        local humanoid = targetBoss:FindFirstChildOfClass("Humanoid")
         
-        -- Teleport your character to the boss's pivot location
-        -- We add a small offset (3 studs back) so you don't glitch inside the model
-        character:PivotTo(bossCFrame * CFrame.new(0, 0, 3))
+        -- Teleport to Boss using Pivot
+        character:PivotTo(targetBoss:GetPivot() * CFrame.new(0, 0, 3))
 
-        -- Clean up the head if it exists
-        local head = targetBoss:FindFirstChild("Head")
-        if head then
-            head:Destroy()
+        -- Instantly set HP to 0 (Note: Only works if you have Network Ownership or the server allows it)
+        if humanoid and humanoid.Health > 0 then
+            humanoid.Health = 0
         end
     end
 end)
