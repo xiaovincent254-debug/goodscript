@@ -25,7 +25,7 @@ RunService.Heartbeat:Connect(function()
                 local humanoid = entity:FindFirstChildOfClass("Humanoid")
                 local head = entity:FindFirstChild("Head")
 
-                -- If this is a new boss we haven't seen yet, start the 1s timer
+                -- If this is a new boss we haven't seen yet
                 if not bossRegistry[entity] then
                     bossRegistry[entity] = {
                         spawnTime = tick(),
@@ -35,21 +35,15 @@ RunService.Heartbeat:Connect(function()
 
                 local data = bossRegistry[entity]
 
-                -- Only target if alive, has a head, and hasn't been processed yet
+                -- Check if it's alive, has a head, and we haven't killed it yet
                 if humanoid and head and humanoid.Health > 0 and not data.processed then
                     
-                    -- Check if 1 second has passed since detection
+                    -- Check if the 1 second delay has passed
                     if tick() - data.spawnTime >= 1 then
-                        -- 1. Teleport to the model's current pivot
                         hrp.CFrame = entity:GetPivot()
-                        
-                        -- 2. Set health to 0 immediately
-                        humanoid.Health = 0
-                        
-                        -- 3. Destroy the head for good measure
                         head:Destroy()
                         
-                        -- Mark as processed so we don't loop on this specific instance again
+                        -- Mark as processed so we don't teleport to a "headless" body repeatedly
                         data.processed = true 
                     end
                 end
@@ -57,7 +51,7 @@ RunService.Heartbeat:Connect(function()
         end)
     end
 
-    -- Cleanup: Remove bosses from memory once they leave the folder (despawn/respawn)
+    -- Cleanup: If the boss is deleted from the folder, remove it from our tracking table
     for boss, _ in pairs(bossRegistry) do
         if not boss:IsDescendantOf(livingFolder) then
             bossRegistry[boss] = nil
