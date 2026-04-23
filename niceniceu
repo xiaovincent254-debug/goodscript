@@ -1,60 +1,53 @@
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-
 local player = Players.LocalPlayer
-local livingFolder = Workspace:FindFirstChild("Living")
 
--- Table to track state: [Model] = {spawnTime = number, processed = boolean}
-local bossRegistry = {}
+local targetBoss = nil
+
+-- Efficiently find the next boss
+local function findBoss()
+    -- Note: GetDescendants can be heavy; use a specific folder if possible
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name == "Boss" then
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                return obj
+            end
+        end
+    end
+    return nil
+end
 
 RunService.Heartbeat:Connect(function()
     local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    
-    local hrp = character.HumanoidRootPart
+    if not character then return end
 
-    if not livingFolder then 
-        livingFolder = Workspace:FindFirstChild("Living")
-        return 
+    -- Validate or clear current target
+    if targetBoss then
+        local hum = targetBoss:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 or not targetBoss:IsDescendantOf(workspace) then
+            targetBoss = nil
+        end
     end
 
-    for _, entity in ipairs(livingFolder:GetChildren()) do
-        pcall(function()
-            if entity:IsA("Model") and entity.Name == "Boss" then
-                local humanoid = entity:FindFirstChildOfClass("Humanoid")
-                local head = entity:FindFirstChild("Head")
-
-                -- If this is a new boss we haven't seen yet
-                if not bossRegistry[entity] then
-                    bossRegistry[entity] = {
-                        spawnTime = tick(),
-                        processed = false
-                    }
-                end
-
-                local data = bossRegistry[entity]
-
-                -- Check if it's alive, has a head, and we haven't killed it yet
-                if humanoid and head and humanoid.Health > 0 and not data.processed then
-                    
-                    -- Check if the 1 second delay has passed
-                    if tick() - data.spawnTime >= 1 then
-                        hrp.CFrame = entity:GetPivot()
-                        head:Destroy()
-                        
-                        -- Mark as processed so we don't teleport to a "headless" body repeatedly
-                        data.processed = true 
-                    end
-                end
-            end
-        end)
+    -- Target acquisition
+    if not targetBoss then
+        targetBoss = findBoss()
     end
 
-    -- Cleanup: If the boss is deleted from the folder, remove it from our tracking table
-    for boss, _ in pairs(bossRegistry) do
-        if not boss:IsDescendantOf(livingFolder) then
-            bossRegistry[boss] = nil
+    -- Execution
+    if targetBoss then
+        -- GetPivot() works even if parts are still streaming in
+        local bossCFrame = targetBoss:GetPivot()
+        
+        -- Teleport your character to the boss's pivot location
+        -- We add a small offset (3 studs back) so you don't glitch inside the model
+        character:PivotTo(bossCFrame * CFrame.new(0, 0, 3))
+
+        -- Clean up the head if it exists
+        local head = targetBoss:FindFirstChild("Head")
+        if head then
+            head:Destroy()
         end
     end
 end)
