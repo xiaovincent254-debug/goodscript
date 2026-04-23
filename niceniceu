@@ -3,13 +3,11 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local targetBoss = nil
-local nextTargetTime = 0 -- Stores the time when we are allowed to find a new boss
+local nextActionTime = 0 -- Cooldown tracker for the 2-second delay
+local TELEPORT_DELAY = 2 -- Configurable delay in seconds
 
--- Function to find the next available boss
+-- Function to find a valid boss
 local function findBoss()
-    -- Only look for a boss if the 1-second cooldown has passed
-    if tick() < nextTargetTime then return nil end
-
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("Model") and obj.Name == "Boss" then
             local humanoid = obj:FindFirstChildOfClass("Humanoid")
@@ -25,32 +23,33 @@ RunService.Heartbeat:Connect(function()
     local character = player.Character
     if not character then return end
 
-    -- 1. Check if current target is still valid/alive
+    -- 1. Target Validation
     if targetBoss then
         local hum = targetBoss:FindFirstChildOfClass("Humanoid")
-        
-        -- If the boss died or was removed
+        -- If boss is dead or gone, clear target
         if not hum or hum.Health <= 0 or not targetBoss:IsDescendantOf(workspace) then
             targetBoss = nil
-            nextTargetTime = tick() + 1 -- Start the 1-second wait timer
         end
     end
 
-    -- 2. Look for a new target if we don't have one
+    -- 2. Target Acquisition
     if not targetBoss then
         targetBoss = findBoss()
     end
 
-    -- 3. Execution Phase
-    if targetBoss then
+    -- 3. The 2-Second Delayed Execution
+    if targetBoss and tick() >= nextActionTime then
         local humanoid = targetBoss:FindFirstChildOfClass("Humanoid")
         
-        -- Teleport to Boss using Pivot
+        -- Perform the teleport
         character:PivotTo(targetBoss:GetPivot() * CFrame.new(0, 0, 3))
 
-        -- Instantly set HP to 0 (Note: Only works if you have Network Ownership or the server allows it)
-        if humanoid and humanoid.Health > 0 then
+        -- Set HP to 0
+        if humanoid then
             humanoid.Health = 0
         end
+
+        -- Set the cooldown for the next jump
+        nextActionTime = tick() + TELEPORT_DELAY
     end
 end)
